@@ -1,4 +1,7 @@
 # 🏆 GeoConquest
+[![Destek Ol!](https://img.shields.io/badge/Destek%20Ol!-yellow?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://coff.ee/brtplus)
+[![Web Sayfası](https://img.shields.io/badge/Web%20Sayfası-blue?style=for-the-badge)](https://berathd7777.github.io/GeoConquest)
+#
 
 ![GeoConquest Banner](https://i.imgur.com/g8uXyA4.png)
 
