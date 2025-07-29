@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>GeoConquest - Alan Sahiplenme</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+
+    <style>
+        :root { /* Google Material 3 Renk Paleti */
+            --primary: #6750A4; --on-primary: #FFFFFF; --primary-container: #EADDFF; --secondary: #625B71;
+            --error: #B3261E; --surface: #FFFBFE; --on-surface: #1C1B1F; --surface-variant: #E7E0EC;
+            --on-surface-variant: #49454F; --outline: #79747E; --surface-container-high: #F3EDF7;
+            --inverse-surface: #313033; --inverse-on-surface: #F4EFF4; --scrim: #000000;
+        }
+        * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+        html, body {
+            margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
+            font-family: 'Roboto', sans-serif; background-color: #f0f0f0; color: var(--on-surface);
+        }
+        .material-symbols-outlined { vertical-align: bottom; }
+        #map { height: 100%; width: 100%; background-color: #e0e0e0; z-index: 1; }
+        
+        .leaflet-control-zoom, .leaflet-control-layers { border: none !important; border-radius: 16px !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; }
+        .leaflet-control-layers { background: rgba(255,255,255,0.8) !important; backdrop-filter: blur(10px); }
+        
+        #main-ui {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1000;
+            pointer-events: none; display: grid; grid-template-rows: auto 1fr auto; padding: 16px; gap: 16px;
+        }
+        .top-bar { display: flex; justify-content: space-between; align-items: flex-start; pointer-events: auto; gap: 12px; }
+        .top-left-controls { display: flex; gap: 12px; flex-grow: 1; }
+        .stat-card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.9), rgba(243,237,247,0.8));
+            backdrop-filter: blur(12px); border-radius: 20px; padding: 12px 16px; 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1); border: 1px solid rgba(255,255,255,0.5); flex-grow: 1;
+        }
+        .stat-card .label { font-size: 0.8rem; font-weight: 600; color: var(--on-surface-variant); display: flex; align-items: center; gap: 4px; }
+        .stat-card .value { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
+        .icon-button {
+            width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer;
+            background-color: var(--surface-container-high); color: var(--on-surface-variant);
+            font-size: 24px; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15); transition: all 0.2s;
+        }
+        .icon-button:active { transform: scale(0.9); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        
+        .bottom-bar { display: flex; align-items: flex-end; justify-content: center; gap: 16px; pointer-events: auto; }
+        .fab {
+            width: 64px; height: 64px; border-radius: 20px; border: none; cursor: pointer;
+            color: var(--on-primary); box-shadow: 0 8px 25px rgba(0,0,0,0.25);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .fab .material-symbols-outlined { font-size: 32px; transition: transform 0.4s ease; }
+        .fab.start { background: linear-gradient(135deg, var(--primary), #8A2BE2); }
+        .fab.stop { background: linear-gradient(135deg, var(--error), #FF4500); }
+        .fab.stop .material-symbols-outlined { transform: rotate(180deg); }
+        #complete-area-fab {
+            width: 56px; height: 56px; border-radius: 16px;
+            background: linear-gradient(135deg, #28a745, #2ed573);
+            transform: scale(0); opacity: 0; transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        #complete-area-fab.visible { transform: scale(1); opacity: 1; }
+        
+        .dialog-scrim {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--scrim); opacity: 0; visibility: hidden;
+            z-index: 2000; transition: opacity 0.4s ease;
+        }
+        .dialog-scrim.visible { opacity: 0.6; visibility: visible; }
+        .dialog {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, 60%);
+            background-color: var(--surface-container-high); border-radius: 28px;
+            padding: 24px; width: calc(100% - 48px); max-width: 340px; z-index: 2001;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.25); opacity: 0; visibility: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .dialog.visible { opacity: 1; visibility: visible; transform: translate(-50%, -50%); }
+        
+        #stats-sheet {
+            position: fixed; bottom: 0; left: 0; width: 100%; max-height: 90vh;
+            background-color: var(--surface-container-high); border-top-left-radius: 28px;
+            border-top-right-radius: 28px; z-index: 3001; padding: 0 16px 16px 16px;
+            box-shadow: 0 -8px 32px rgba(0,0,0,0.2); transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column;
+        }
+        #stats-sheet.open { transform: translateY(0); }
+        
+        #toast {
+            position: fixed; bottom: 110px; left: 50%; transform: translate(-50%, 200%);
+            background-color: var(--inverse-surface); color: var(--inverse-on-surface);
+            padding: 14px 24px; border-radius: 12px; z-index: 4000; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            font-weight: 500; transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s; opacity: 0;
+        }
+        #toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+        #loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--surface); z-index: 5000;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: opacity 0.5s ease;
+        }
+        .spinner {
+            width: 48px; height: 48px; border: 5px solid var(--primary-container);
+            border-top-color: var(--primary); border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        #loader p { margin-top: 20px; font-size: 1.2rem; color: var(--on-surface-variant); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="loader"><div class="spinner"></div><p>Uygulama yükleniyor...</p></div>
+    <div id="map"></div>
+    <div id="main-ui"><!-- (İçerik JS ile yönetilecek) --></div>
+    <div class="dialog-scrim" id="dialog-scrim"></div>
+    <div class="dialog" id="login-dialog"></div>
+    <div id="stats-sheet"></div>
+    <div class="dialog" id="qr-dialog"></div>
+    <div id="toast"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src='https://unpkg.com/@turf/turf@6/turf.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    
+    <script>
+        // PWA için Service Worker'ı kaydet
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker: Kaydedildi'))
+                    .catch(err => console.log('Service Worker: Kayıt Hatası:', err));
+            });
+        }
+        // Ana uygulama mantığı
+        document.addEventListener('DOMContentLoaded', () => {
+            const App = {
+                state: { isWalking: false, watchId: null, locationTimeoutId: null, game: { playerName: null, playerColor: '#6750A4', totalEnergy: 0, totalArea: 0, allPolygons: [], currentWalk: { path: [], startTime: null } } },
+                config: { MIN_DISTANCE_METERS: 3, MIN_ACCURACY_METERS: 30, MIN_VERTICES_FOR_CLOSURE: 4, PLAYER_COLORS: ['#6750A4', '#006A66', '#B3261E', '#1D6B00', '#7D5260', '#3E6179'], LOCATION_TIMEOUT: 12000 },
+                map: null, userMarker: null, accuracyCircle: null, tempPathLine: null, dom: {}, tts: window.speechSynthesis,
+    
+                init() { this.cacheDom(); this.UI.renderStaticTemplates(); this.Events.setup(); this.loadGame(); if (!this.state.game.playerName) { this.UI.showDialog(this.dom.loginDialog); } else { this.setupGame(); } },
+                cacheDom() { this.dom = { loader: document.getElementById('loader'), mainUI: document.getElementById('main-ui'), walkFab: document.getElementById('walk-fab'), completeAreaFab: document.getElementById('complete-area-fab'), energyDisplay: document.getElementById('energy-display'), areaDisplay: document.getElementById('area-display'), dialogScrim: document.getElementById('dialog-scrim'), loginDialog: document.getElementById('login-dialog'), statsSheet: document.getElementById('stats-sheet'), qrDialog: document.getElementById('qr-dialog'), toast: document.getElementById('toast'), }; },
+                speak(text, priority = 'normal') { if (this.tts) { if (this.tts.speaking && priority !== 'high') return; if (this.tts.speaking) this.tts.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = 'tr-TR'; u.rate = 1.1; this.tts.speak(u); }},
+                setupGame() { this.UI.closeAllDialogs(); this.Map.init(); this.UI.updateStats(); this.Map.renderAllPolygons(); this.UI.renderSettings(); this.Map.locate(); },
+                loadGame() { const d = localStorage.getItem('geoConquestGame'); if (d) this.state.game = JSON.parse(d); },
+                saveGame() { localStorage.setItem('geoConquestGame', JSON.stringify(this.state.game)); },
+    
+                UI: {
+                    showLoader(text) { App.dom.loader.style.display = 'flex'; App.dom.loader.style.opacity = '1'; App.dom.loader.querySelector('p').textContent = text; },
+                    hideLoader() { App.dom.loader.style.opacity = '0'; setTimeout(() => App.dom.loader.style.display = 'none', 500); },
+                    updateStats() { App.dom.energyDisplay.textContent = App.state.game.totalEnergy.toLocaleString('tr-TR'); App.dom.areaDisplay.textContent = App.state.game.totalArea.toFixed(0).toLocaleString('tr-TR'); const playerNameEl = App.dom.statsSheet.querySelector('#player-name-display'); if(playerNameEl) playerNameEl.textContent = App.state.game.playerName; },
+                    showDialog(el) { App.dom.dialogScrim.classList.add('visible'); el.classList.add('visible'); },
+                    showStatsSheet() { this.updateAreaList(); this.showDialog(App.dom.statsSheet); },
+                    closeAllDialogs() { App.dom.dialogScrim.classList.remove('visible'); document.querySelectorAll('.dialog.visible, #stats-sheet.open').forEach(el => el.classList.remove('visible', 'open')); },
+                    showToast(msg, isErr = false) { App.dom.toast.textContent = msg; App.dom.toast.style.backgroundColor = isErr ? "var(--error)" : "var(--inverse-surface)"; App.dom.toast.classList.add('show'); if (isErr) App.speak("Hata.", 'high'); setTimeout(() => App.dom.toast.classList.remove('show'), 3000); },
+                    toggleFabState(isWalking) { const f = App.dom.walkFab; f.innerHTML = `<span class="material-symbols-outlined">${isWalking ? 'stop' : 'play_arrow'}</span>`; f.classList.toggle('start', !isWalking); f.classList.toggle('stop', isWalking); },
+                    updateAreaList() { const list = App.dom.statsSheet.querySelector('#area-list'); const p = App.state.game.allPolygons; if(p.length===0){list.innerHTML = `<p style="padding:16px;text-align:center;color:var(--on-surface-variant);">Henüz alan yok.</p>`;return;} list.innerHTML = ''; p.slice().reverse().forEach(poly => { const item = document.createElement('div'); item.className='area-list-item'; item.style="display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:12px;cursor:pointer;"; item.innerHTML = `<div><strong>${poly.name}</strong><span style="display:block;font-size:0.8rem;color:var(--on-surface-variant);">${new Date(poly.date).toLocaleDateString('tr-TR')}</span></div><span>+${poly.energyGained}⚡</span>`; item.onclick = () => { this.closeAllDialogs(); App.map.fitBounds(L.polygon(poly.path).getBounds(), { padding: [50, 50] }); }; list.appendChild(item); }); },
+                    renderSettings() { const cont = App.dom.statsSheet.querySelector('#color-options-container'); cont.innerHTML = ''; App.config.PLAYER_COLORS.forEach(c => { const d = document.createElement('div'); d.className='color-dot'; d.style="width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:all 0.2s;"; d.style.backgroundColor = c; if (c === App.state.game.playerColor) d.classList.add('selected'); d.onclick = () => { App.state.game.playerColor = c; App.saveGame(); this.updateStats(); this.renderSettings(); }; cont.appendChild(d); }); },
+                    renderStaticTemplates() { /* HTML templates... */ App.dom.mainUI.innerHTML = `<div class="top-bar"><div class="top-left-controls"><div class="stat-card"><div class="label"><span class="material-symbols-outlined">bolt</span>ENERJİ</div><div class="value" id="energy-display">0</div></div><div class="stat-card"><div class="label"><span class="material-symbols-outlined">texture</span>ALAN (m²)</div><div class="value" id="area-display">0</div></div></div><div style="display: flex; flex-direction: column; gap: 12px;"><button class="icon-button" id="recenter-button" title="Konumumu Bul"><span class="material-symbols-outlined">my_location</span></button><button class="icon-button" id="stats-button" title="İstatistikler"><span class="material-symbols-outlined">query_stats</span></button></div></div><div></div><div class="bottom-bar"><button class="fab" id="complete-area-fab" title="Alanı Tamamla"><span class="material-symbols-outlined">done_all</span></button><button class="fab start" id="walk-fab" title="Yürüyüşü Başlat"><span class="material-symbols-outlined">play_arrow</span></button></div>`; }
+                },
+                Map: {
+                    init() { if (App.map) return; const s = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 20 }); const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; Esri', maxZoom: 20 }); App.map = L.map('map', { layers: [s], zoomControl: false, attributionControl: false }).setView([39.5, 32.5], 5); L.control.zoom({ position: 'bottomright' }).addTo(App.map); L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(App.map); L.control.layers({ "Sokaklar": s, "Uydu": sat }).addTo(App.map); },
+                    locate() { App.UI.showLoader("Konum bulunuyor..."); App.map.locate({ setView: true, maxZoom: 18, enableHighAccuracy: true }); clearTimeout(App.state.locationTimeoutId); App.state.locationTimeoutId = setTimeout(() => { App.map.stopLocate(); this.onLocationError(); }, App.config.LOCATION_TIMEOUT); App.map.once('locationfound', this.onInitialLocationFound); },
+                    onInitialLocationFound(e) { clearTimeout(App.state.locationTimeoutId); App.UI.hideLoader(); if (!App.userMarker) { App.userMarker = L.marker(e.latlng, { icon: App.Map.createPlayerIcon() }).addTo(App.map); App.accuracyCircle = L.circle(e.latlng, e.accuracy, { weight: 1, color: App.state.game.playerColor, fillColor: App.state.game.playerColor, fillOpacity: 0.1 }).addTo(App.map); } App.Map.updateMarkerPosition(e.latlng, e.accuracy); },
+                    onLocationError(e) { clearTimeout(App.state.locationTimeoutId); App.UI.hideLoader(); App.UI.showToast("Konum bulunamadı. GPS'i kontrol edip tekrar deneyin.", true); },
+                    recenter() { if (App.userMarker) App.map.setView(App.userMarker.getLatLng(), 18, { animate: true }); else this.locate(); },
+                    createPlayerIcon: () => L.divIcon({ className: 'user-marker', html: `<div style="background-color: ${App.state.game.playerColor}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px ${App.state.game.playerColor};"></div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+                    updateMarkerPosition(latlng, acc) { if (App.userMarker) { App.userMarker.setLatLng(latlng).setIcon(this.createPlayerIcon()); App.accuracyCircle.setLatLng(latlng).setRadius(acc).setStyle({color: App.state.game.playerColor, fillColor: App.state.game.playerColor}); } if(App.state.isWalking) App.map.panTo(latlng, { animate: true, duration: 1 }); },
+                    renderAllPolygons() { App.state.game.allPolygons.forEach(p => this.renderPolygon(p)); },
+                    renderPolygon(p) { L.polygon(p.path, { color: p.color, fillColor: p.color, fillOpacity: 0.5, weight: 3 }).addTo(App.map).bindPopup(`<b>${p.name}</b><br>Enerji: ${p.energyGained}⚡<br>Alan: ${p.area.toFixed(0)} m²`); }
+                },
+                Game: {
+                    toggleWalk() { App.state.isWalking ? this.stopWalk(false) : this.startWalk(); },
+                    startWalk() { App.state.isWalking = true; App.state.game.currentWalk = { path: [], startTime: Date.now() }; if(App.tempPathLine) App.map.removeLayer(App.tempPathLine); App.tempPathLine = L.polyline([], { color: App.state.game.playerColor, weight: 4, dashArray: '5, 10' }).addTo(App.map); this.startTracking(); App.UI.toggleFabState(true); App.speak("Yürüyüş başlatıldı."); },
+                    stopWalk(completed) { App.state.isWalking = false; this.stopTracking(); if (App.tempPathLine) { App.map.removeLayer(App.tempPathLine); App.tempPathLine = null; } App.UI.toggleFabState(false); App.dom.completeAreaFab.classList.remove('visible'); if(!completed) App.speak("Yürüyüş durduruldu."); },
+                    startTracking() { App.state.watchId = navigator.geolocation.watchPosition(this.onLocationUpdate, App.Map.onLocationError, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }); },
+                    stopTracking() { if (App.state.watchId) { navigator.geolocation.clearWatch(App.state.watchId); App.state.watchId = null; } },
+                    onLocationUpdate(pos) { if (!App.state.isWalking) return; const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords; const latlng = [lat, lng]; App.Map.updateMarkerPosition(latlng, acc); if (acc > App.config.MIN_ACCURACY_METERS) return; const path = App.state.game.currentWalk.path; if (path.length > 0 && L.latLng(latlng).distanceTo(L.latLng(path[path.length - 1])) < App.config.MIN_DISTANCE_METERS) return; path.push(latlng); App.tempPathLine.addLatLng(latlng); App.Game.checkClosurePossibility(); },
+                    checkClosurePossibility() { const can = App.state.game.currentWalk.path.length >= App.config.MIN_VERTICES_FOR_CLOSURE; if (can && !App.dom.completeAreaFab.classList.contains('visible')) App.speak("Alanı kapatmaya hazırsın."); App.dom.completeAreaFab.classList.toggle('visible', can); },
+                    forceCompleteArea() { if (App.state.game.currentWalk.path.length < App.config.MIN_VERTICES_FOR_CLOSURE) { App.UI.showToast(`En az ${App.config.MIN_VERTICES_FOR_CLOSURE} nokta gerekli.`, true); return; } const path = App.state.game.currentWalk.path; const poly = turf.polygon([[...path, path[0]]]); const area = turf.area(poly); const energy = Math.round((path.length * 5) + (area / 10)); const pData = { id: Date.now(), name: `Alan #${App.state.game.allPolygons.length + 1}`, date: new Date().toISOString(), path, color: App.state.game.playerColor, area, energyGained: energy }; App.state.game.allPolygons.push(pData); App.state.game.totalArea += area; App.state.game.totalEnergy += energy; App.Map.renderPolygon(pData); App.UI.updateStats(); App.UI.updateAreaList(); App.saveGame(); this.stopWalk(true); const msg = `Tebrikler, alan kapatıldı. ${energy} enerji kazandın.`; App.speak(msg); App.UI.showToast(`Alan kapatıldı! +${energy} enerji`); },
+                },
+                Events: {
+                    setup() { document.body.addEventListener('click', e => { const t = e.target.closest('button, .tab, .color-dot'); if (!t) return; if(t.classList.contains('color-dot')){App.state.game.playerColor=t.style.backgroundColor;App.saveGame();App.UI.updateStats();App.UI.renderSettings();return;} if(t.classList.contains('tab')){const tabC=App.dom.statsSheet.querySelector('.tabs');tabC.querySelector('.active').classList.remove('active');t.classList.add('active');tabC.parentElement.querySelector('.sheet-content .active').classList.remove('active');tabC.parentElement.querySelector(`#${t.dataset.tab}-tab`).classList.add('active');return;} switch (t.id) { case 'walk-fab': App.Game.toggleWalk(); break; case 'stats-button': App.UI.showStatsSheet(); break; case 'recenter-button': App.Map.recenter(); break; case 'complete-area-fab': App.Game.forceCompleteArea(); break; case 'close-sheet-button': case 'close-qr-dialog-button': App.UI.closeAllDialogs(); break; case 'start-game-button': const n=document.getElementById('username-input').value.trim();if(n){App.state.game.playerName=n;App.saveGame();App.setupGame();}else{App.UI.showToast("Lütfen bir kullanıcı adı girin.",true);} break; case 'reset-game-button': App.speak("Tüm verileri silmek istediğine emin misin?");setTimeout(()=>{if(confirm("Emin misin?")){App.Game.stopTracking();localStorage.removeItem('geoConquestGame');location.reload();}},100); break; case 'generate-qr-button': App.UI.closeAllDialogs();setTimeout(()=>this.generateAndShowQR(),400);break;} }); App.dom.dialogScrim.addEventListener('click', () => App.UI.closeAllDialogs()); },
+                    generateAndShowQR() { const qrCont = App.dom.qrDialog.querySelector('#qr-canvas-container'); qrCont.innerHTML = ''; const cvs = document.createElement('canvas'); qrCont.appendChild(cvs); const qrData = JSON.stringify({oyuncu:App.state.game.playerName,enerji:App.state.game.totalEnergy,alan_m2:Math.round(App.state.game.totalArea),alanSayisi:App.state.game.allPolygons.length}); QRCode.toCanvas(cvs,qrData,{width:256,margin:2},e=>{if(e){console.error(e);App.UI.showToast("QR Kod oluşturulamadı!",true);return;}App.UI.showDialog(App.dom.qrDialog);}); }
+                }
+            }; App.init();
+        });
+    </script>
+</body>
+</html>
